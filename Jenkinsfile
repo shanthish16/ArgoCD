@@ -14,7 +14,7 @@ pipeline {
         ACCOUNT_ID = "220309168382"
         ECR_REPO = "sonar-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        IMAGE_URI = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+        IMAGE_URI = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
         PROJECT_KEY = "sonar-app"
     }
 
@@ -56,10 +56,16 @@ pipeline {
         }
 
         // ================= DOCKER BUILD =================
-        stage('Build Docker Image (Code Built Inside Docker)') {
+        stage('Build Docker Image') {
             steps {
                 sh """
-                    docker build -t ${IMAGE_URI} .
+                    echo "Building Docker image with tag ${IMAGE_TAG}"
+                    
+                    docker build -t ${IMAGE_URI}:${IMAGE_TAG} .
+                    
+                    echo "Tagging image as latest"
+                    
+                    docker tag ${IMAGE_URI}:${IMAGE_TAG} ${IMAGE_URI}:latest
                 """
             }
         }
@@ -78,7 +84,11 @@ pipeline {
         stage('Push Image to ECR') {
             steps {
                 sh """
-                    docker push ${IMAGE_URI}
+                    echo "Pushing build number tag ${IMAGE_TAG}"
+                    docker push ${IMAGE_URI}:${IMAGE_TAG}
+                    
+                    echo "Pushing latest tag"
+                    docker push ${IMAGE_URI}:latest
                 """
             }
         }
