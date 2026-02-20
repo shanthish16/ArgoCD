@@ -31,15 +31,16 @@ pipeline {
         // ================= SONAR ANALYSIS =================
         stage('Sonar Analysis') {
             steps {
-                configFileProvider([configFile(fileId: 'nexus-settings', variable: 'MAVEN_SETTINGS')]) {
-                    withSonarQubeEnv('SonarQube') {
-                        withCredentials([string(credentialsId: 'sonarqube-token-K8s', variable: 'TOKEN_SONAR')]) {
-                            sh """
-                                mvn -B -s $MAVEN_SETTINGS clean verify sonar:sonar \
-                                -Dsonar.projectKey=${PROJECT_KEY} \
-                                -Dsonar.token=$TOKEN_SONAR
-                            """
-                        }
+                withSonarQubeEnv('SonarQube') {
+                    withCredentials([
+                        string(credentialsId: 'sonarqube-token-K8s', variable: 'SONAR_TOKEN')
+                    ]) {
+                        sh """
+                            mvn clean verify sonar:sonar \
+                              -Dsonar.projectKey=${PROJECT_KEY} \
+                              -Dsonar.projectName=${PROJECT_KEY} \
+                              -Dsonar.token=${SONAR_TOKEN}
+                        """
                     }
                 }
             }
