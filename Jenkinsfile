@@ -2,14 +2,10 @@ pipeline {
     agent any
 
     parameters {
-        gitParameter(
+        choice(
             name: 'BRANCH',
-            type: 'PT_BRANCH',
-            defaultValue: 'main',
-            branchFilter: 'origin/(.*)',
-            sortMode: 'DESCENDING',
-            selectedValue: 'DEFAULT',
-            description: 'Select Branch to Build'
+            choices: ['main', 'dev', 'test'],
+            description: 'Select Branch'
         )
     }
 
@@ -19,49 +15,69 @@ pipeline {
         ECR_REPO = "sonar-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
         IMAGE_URI = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+        PROJECT_KEY = "sonar-app"
     }
 
     stages {
 
+        // ================= CHECKOUT =================
         stage('Checkout (Select Branch From Dropdown)') {
             steps {
-                echo "Building branch: ${params.BRANCH}"
                 git branch: "${params.BRANCH}",
-                    url: 'https://github.com/<username>/your-app-repo.git'
+                    url: 'https://github.com/shanthish16/ArgoCD.git'
             }
         }
 
+        // ================= SONAR ANALYSIS =================
         stage('Sonar Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube') {
-                    sh 'mvn clean verify sonar:sonar'
+                configFileProvider([configFile(fileId: 'nexus-settings', variable: 'MAVEN_SETTINGS')]) {
+                    withSonarQubeEnv('SonarQube') {
+                        withCredentials([string(credentialsId: 'sonarqube-token-K8s', variable: 'TOKEN_SONAR')]) {
+                            sh """
+                                mvn -B -s $MAVEN_SETTINGS clean verify sonar:sonar \
+                                -Dsonar.projectKey=${PROJECT_KEY} \
+                                -Dsonar.token=$TOKEN_SONAR
+                            """
+                        }
+                    }
                 }
             }
         }
 
+        // ================= QUALITY GATE =================
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        // ================= DOCKER BUILD =================
         stage('Build Docker Image (Code Built Inside Docker)') {
             steps {
-                echo "Building Docker Image: ${IMAGE_URI}"
                 sh """
-                docker build -t ${IMAGE_URI} .
+                    docker build -t ${IMAGE_URI} .
                 """
             }
         }
 
+        // ================= ECR LOGIN =================
         stage('Login to ECR') {
             steps {
                 sh """
-                aws ecr get-login-password --region ${AWS_REGION} | \
-                docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
                 """
             }
         }
 
+        // ================= PUSH IMAGE =================
         stage('Push Image to ECR') {
             steps {
-                echo "Pushing Docker Image to ECR"
                 sh """
-                docker push ${IMAGE_URI}
+                    docker push ${IMAGE_URI}
                 """
             }
         }
@@ -69,10 +85,10 @@ pipeline {
 
     post {
         success {
-            echo "Image pushed successfully to ECR"
+            echo "Pipeline executed successfully!"
         }
         failure {
-            echo "Pipeline failed"
+            echo "Pipeline failed!"
         }
     }
 }
