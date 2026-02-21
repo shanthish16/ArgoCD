@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
       - name: sonar-app
-        image: 220309168382.dkr.ecr.eu-north-1.amazonaws.com/sonar-app:1
+        image: 220309168382.dkr.ecr.eu-north-1.amazonaws.com/sonar-app:8
         ports:
         - containerPort: 8080
