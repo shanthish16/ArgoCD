@@ -16,6 +16,7 @@ pipeline {
         IMAGE_TAG = "${BUILD_NUMBER}"
         IMAGE_URI = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
         PROJECT_KEY = "sonar-app"
+        GIT_REPO = "https://github.com/shanthish16/ArgoCD.git"
     }
 
     stages {
@@ -24,7 +25,7 @@ pipeline {
         stage('Checkout (Select Branch From Dropdown)') {
             steps {
                 git branch: "${params.BRANCH}",
-                    url: 'https://github.com/shanthish16/ArgoCD.git'
+                    url: "${GIT_REPO}"
             }
         }
 
@@ -60,17 +61,13 @@ pipeline {
             steps {
                 sh """
                     echo "Building Docker image with tag ${IMAGE_TAG}"
-                    
                     docker build -t ${IMAGE_URI}:${IMAGE_TAG} .
-                    
-                    echo "Tagging image as latest"
-                    
                     docker tag ${IMAGE_URI}:${IMAGE_TAG} ${IMAGE_URI}:latest
                 """
             }
         }
 
-        // ================= ECR LOGIN =================
+        // ================= LOGIN TO ECR =================
         stage('Login to ECR') {
             steps {
                 sh """
@@ -86,17 +83,43 @@ pipeline {
                 sh """
                     echo "Pushing build number tag ${IMAGE_TAG}"
                     docker push ${IMAGE_URI}:${IMAGE_TAG}
-                    
+
                     echo "Pushing latest tag"
                     docker push ${IMAGE_URI}:latest
                 """
+            }
+        }
+
+        // ================= UPDATE YAML FOR ARGOCD =================
+        stage('Update K8s Manifest & Push to GitHub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-creds',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_PASS'
+                )]) {
+
+                    sh """
+                        echo "Updating deployment.yaml with new image tag"
+
+                        git config user.email "jenkins@local"
+                        git config user.name "jenkins"
+
+                        sed -i 's|image:.*|image: ${IMAGE_URI}:${IMAGE_TAG}|g' k8s/deployment.yaml
+
+                        git add k8s/deployment.yaml
+                        git commit -m "Updated image to ${IMAGE_TAG}"
+                        
+                        git push https://${GIT_USER}:${GIT_PASS}@github.com/shanthish16/ArgoCD.git HEAD:${params.BRANCH}
+                    """
+                }
             }
         }
     }
 
     post {
         success {
-            echo "Pipeline executed successfully!"
+            echo "Pipeline executed successfully! ArgoCD will deploy automatically."
         }
         failure {
             echo "Pipeline failed!"
