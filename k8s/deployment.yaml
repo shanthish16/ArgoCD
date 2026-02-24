@@ -15,6 +15,8 @@ spec:
       containers:
       - name: sonar-app
         image: 220309168382.dkr.ecr.eu-north-1.amazonaws.com/sonar-app:8
-        imagePullPolicy: Always  # Add this to force a fresh pull attempt
         ports:
         - containerPort: 8080
+      # --- ADD THE SECTION BELOW ---
+      imagePullSecrets:
+      - name: ecr-registry-helper
