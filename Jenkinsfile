@@ -61,7 +61,7 @@ pipeline {
             steps {
                 sh """
                     echo "Building Docker image with tag ${IMAGE_TAG}"
-                    docker build -t ${IMAGE_URI}:${IMAGE_TAG} .
+                    docker build --no-cache -t ${IMAGE_URI}:${IMAGE_TAG} .
                     docker tag ${IMAGE_URI}:${IMAGE_TAG} ${IMAGE_URI}:latest
                 """
             }
